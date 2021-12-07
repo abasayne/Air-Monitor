@@ -1,0 +1,325 @@
+/* Test sketch for Adafruit PM2.5 sensor with UART or I2C */
+
+#include "Adafruit_PM25AQI.h"
+
+// If your PM2.5 is UART only, for UNO and others (without hardware serial) 
+// we must use software serial...
+// pin #2 is IN from sensor (TX pin on sensor), leave pin #3 disconnected
+// comment these two lines if using hardware serial
+#include <SoftwareSerial.h>
+SoftwareSerial pmSerial(8, 9);
+
+Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
+
+
+
+
+// include the display library code:
+#include <LiquidCrystal.h>
+
+// initialize the library by associating any needed LCD interface pin
+// with the arduino pin number it is connected to
+const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+
+
+
+//Neo Pixel included
+
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+ #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
+#endif
+
+// Which pin on the Arduino is connected to the NeoPixels?
+#define PIN        6 // On Trinket or Gemma, suggest changing this to 1
+
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS 16 // Popular NeoPixel ring size
+
+// When setting up the NeoPixel library, we tell it how many pixels,
+// and which pin to use to send signals. Note that for older NeoPixel
+// strips you might need to change the third parameter -- see the
+// strandtest example for more information on possible values.
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+#define DELAYVAL 500 // Time (in milliseconds) to pause between pixels
+
+//button
+
+const int buttonPin = 13;     // the number of the pushbutton pin
+// variables will change:
+int buttonState = 0;         // variable for reading the pushbutton status
+
+bool spanish= false;
+void setup() {
+
+// initialize the pushbutton pin as an input:
+  pinMode(buttonPin, INPUT);
+
+
+// These lines are specifically to support the Adafruit Trinket 5V 16 MHz.
+  // Any other board, you can remove this part (but no harm leaving it):
+#if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
+  clock_prescale_set(clock_div_1);
+#endif
+  // END of Trinket-specific code.
+
+  pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
+
+
+  
+  // Wait for serial monitor to open
+  Serial.begin(115200);
+  while (!Serial) delay(10);
+
+  Serial.println("Adafruit PMSA003I Air Quality Sensor");
+
+  // Wait one second for sensor to boot up!
+  delay(1000);
+  
+ 
+  // If using serial, initialize it and set baudrate before starting!
+  // Uncomment one of the following
+  //Serial1.begin(9600);
+ pmSerial.begin(9600);
+ lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Calibrating...");
+      delay(2000);
+
+  
+  // There are 3 options for connectivity!
+  //if (! aqi.begin_I2C()) {      // connect to the sensor over I2C
+  //if (! aqi.begin_UART(&Serial1)) { // connect to the sensor over hardware serial
+ if (! aqi.begin_UART(&pmSerial)) { // connect to the sensor over software serial 
+    Serial.println("Could not find PM 2.5 sensor!");
+    while (1) delay(10);
+  }
+
+  Serial.println("PM25 found!");
+}
+
+void loop() {
+
+ pixels.clear(); // Set all pixel colors to 'off'
+ 
+  PM25_AQI_Data data;
+  
+  if (! aqi.read(&data)) {
+    Serial.println("Could not read from AQI");
+    delay(500);  // try again in a bit!
+    return;
+  }
+  Serial.println("AQI reading success");
+
+  Serial.println();
+  Serial.println(F("---------------------------------------"));
+  Serial.println(F("Concentration Units (standard)"));
+  Serial.println(F("---------------------------------------"));
+  Serial.print(F("PM 1.0: ")); Serial.print(data.pm10_standard);
+  Serial.print(F("\t\tPM 2.5: ")); Serial.print(data.pm25_standard);
+  Serial.print(F("\t\tPM 10: ")); Serial.println(data.pm100_standard);
+  Serial.println(F("Concentration Units (environmental)"));
+  Serial.println(F("---------------------------------------"));
+  Serial.print(F("PM 1.0: ")); Serial.print(data.pm10_env);
+  Serial.print(F("\t\tPM 2.5: ")); Serial.print(data.pm25_env);
+  Serial.print(F("\t\tPM 10: ")); Serial.println(data.pm100_env);
+  Serial.println(F("---------------------------------------"));
+  Serial.print(F("Particles > 0.3um / 0.1L air:")); Serial.println(data.particles_03um);
+  Serial.print(F("Particles > 0.5um / 0.1L air:")); Serial.println(data.particles_05um);
+  Serial.print(F("Particles > 1.0um / 0.1L air:")); Serial.println(data.particles_10um);
+  Serial.print(F("Particles > 2.5um / 0.1L air:")); Serial.println(data.particles_25um);
+  Serial.print(F("Particles > 5.0um / 0.1L air:")); Serial.println(data.particles_50um);
+  Serial.print(F("Particles > 10 um / 0.1L air:")); Serial.println(data.particles_100um);
+  Serial.println(F("---------------------------------------"));
+
+
+  // read the state of the pushbutton value:
+  buttonState = digitalRead(buttonPin);
+
+  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+  if (buttonState == HIGH && spanish == true) {
+    
+  if ((data.pm10_env) < 30 && (data.pm10_env) > 0)
+  spanish = false;
+  {
+    
+  lcd.clear();
+  lcd.setCursor(0, 0);
+    lcd.print("The air is clean");
+
+  pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(0, 150, 0));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+  
+    delay(2000);
+    }
+ else if ((data.pm10_env) < 40 && (data.pm10_env) > 30){
+   lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Minor Pollution");
+        pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(255, 255, 25));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+      delay(2000);}
+      
+ else if ((data.pm10_env) < 50 && (data.pm10_env) > 40){
+   lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Moderate Pollution,");
+      pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(255, 128, 0));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+      delay(2000);}
+      
+ else {
+   lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Wear a mask.");
+ pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+      delay(2000);
+    }
+ } 
+ 
+ else if (button == HIGH && spanish == false){
+  if ((data.pm10_env) < 30 && (data.pm10_env) > 0)
+  spanish= true;
+  {
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+    lcd.print("Aire limpio");
+
+  pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(0, 150, 0));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+  
+    delay(2000);
+    }
+ else if ((data.pm10_env) < 40 && (data.pm10_env) > 30){
+   lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Polucion minima");
+        pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(255, 255, 25));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+      
+ else if ((data.pm10_env) < 50 && (data.pm10_env) > 40){
+   lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Polucion moderado,");
+      pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(255, 128, 0));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+      
+ else {
+   lcd.clear();
+   lcd.setCursor(0, 0);
+      lcd.print("Ponte mascara");
+ pixels.clear(); // Set all pixel colors to 'off'
+
+  // The first NeoPixel in a strand is #0, second is 1, all the way up
+  // to the count of pixels minus one.
+  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+    // Here we're using a moderately bright green color:
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0));
+
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(DELAYVAL); // Pause before next pass through loop
+  }
+  
+ }
+ }
+}
+ void colorWipe(uint32_t color, int wait) {
+  for(int i=0; i<pixels.numPixels(); i++) { // For each pixel in strip...
+    pixels.setPixelColor(i, color);         //  Set pixel's color (in RAM)
+    pixels.show();                          //  Update strip to match
+    delay(wait);                           //  Pause for a moment
+  }
+}
+ 
